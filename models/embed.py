@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import math
 
 class PositionalEmbedding(nn.Module):
+    # 绝对位置编码，和Transformer一样
     def __init__(self, d_model, max_len=5000):
         super(PositionalEmbedding, self).__init__()
         # Compute the positional encodings once in log space.
@@ -24,6 +25,7 @@ class PositionalEmbedding(nn.Module):
         return self.pe[:, :x.size(1)]
 
 class TokenEmbedding(nn.Module):
+    # padding+embedding，下面的out_channels是d_model
     def __init__(self, c_in, d_model):
         super(TokenEmbedding, self).__init__()
         padding = 1 if torch.__version__>='1.5.0' else 2
@@ -31,7 +33,7 @@ class TokenEmbedding(nn.Module):
                                     kernel_size=3, padding=padding, padding_mode='circular')
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
-                nn.init.kaiming_normal_(m.weight,mode='fan_in',nonlinearity='leaky_relu')
+                nn.init.kaiming_normal_(m.weight,mode='fan_in',nonlinearity='leaky_relu') # 权重初始化
 
     def forward(self, x):
         x = self.tokenConv(x.permute(0, 2, 1)).transpose(1,2)
@@ -57,6 +59,7 @@ class FixedEmbedding(nn.Module):
         return self.emb(x).detach()
 
 class TemporalEmbedding(nn.Module):
+    # 这是数据增强的手段，在附录中写了
     def __init__(self, d_model, embed_type='fixed', freq='h'):
         super(TemporalEmbedding, self).__init__()
 
@@ -83,6 +86,7 @@ class TemporalEmbedding(nn.Module):
         return hour_x + weekday_x + day_x + month_x + minute_x
 
 class TimeFeatureEmbedding(nn.Module):
+    # 也是数据增强的手段，不过是同各国全连接层进行数据增强而不是通过Embed层进行数据增强。
     def __init__(self, d_model, embed_type='timeF', freq='h'):
         super(TimeFeatureEmbedding, self).__init__()
 
