@@ -23,6 +23,7 @@ class ConvLayer(nn.Module):
         return x
 
 class EncoderLayer(nn.Module):
+    # 单层Encoderlayer
     def __init__(self, attention, d_model, d_ff=None, dropout=0.1, activation="relu"):
         super(EncoderLayer, self).__init__()
         d_ff = d_ff or 4*d_model
@@ -53,6 +54,7 @@ class EncoderLayer(nn.Module):
         return self.norm2(x+y), attn
 
 class Encoder(nn.Module):
+    # 几个encoder layer+ conv layer构成一个Encoder module
     def __init__(self, attn_layers, conv_layers=None, norm_layer=None):
         super(Encoder, self).__init__()
         self.attn_layers = nn.ModuleList(attn_layers)
@@ -65,7 +67,7 @@ class Encoder(nn.Module):
         if self.conv_layers is not None:
             for attn_layer, conv_layer in zip(self.attn_layers, self.conv_layers):
                 x, attn = attn_layer(x, attn_mask=attn_mask)
-                x = conv_layer(x)
+                x = conv_layer(x) # 这里的放缩其实是在Encoder中实现的而不是在Attention中实现的
                 attns.append(attn)
             x, attn = self.attn_layers[-1](x)
             attns.append(attn)
@@ -80,9 +82,10 @@ class Encoder(nn.Module):
         return x, attns
 
 class EncoderStack(nn.Module):
+    # 几个Encoder Module构成一个编码器
     def __init__(self, encoders):
         super(EncoderStack, self).__init__()
-        self.encoders = nn.ModuleList(encoders)
+        self.encoders = nn.ModuleList(encoders) # 果然在这里使用了modulelist，列表根本跑不通
 
     def forward(self, x, attn_mask=None):
         # x [B, L, D]
@@ -91,11 +94,11 @@ class EncoderStack(nn.Module):
         attns = []
         for encoder in self.encoders:
             if encoder is None:
-                inp_len = inp_len//2
+                inp_len = inp_len//2 # 在这里进行attention distillation
                 continue
             x, attn = encoder(x[:, -inp_len:, :])
             x_stack.append(x); attns.append(attn)
             inp_len = inp_len//2
-        x_stack = torch.cat(x_stack, -2)
+        x_stack = torch.cat(x_stack, -2) # 将所有encoder得到的输入进行concat而不是只采取最后一个encoder
         
         return x_stack, attns
