@@ -82,6 +82,7 @@ class Informer(nn.Module):
 
 
 class InformerStack(nn.Module):
+    '''这个好像没得差别，只是这个可以堆叠Informer的Encoder和Decoder的数量'''
     def __init__(self, enc_in, dec_in, c_out, seq_len, label_len, out_len, 
                 factor=5, d_model=512, n_heads=8, e_layers=3, d_layers=2, d_ff=512, 
                 dropout=0.0, attn='prob', embed='fixed', freq='h', activation='gelu',
@@ -119,7 +120,7 @@ class InformerStack(nn.Module):
                 ] if distil else None,
                 norm_layer=torch.nn.LayerNorm(d_model)
             ) for el in stacks]
-        self.encoder = EncoderStack(encoders)
+        self.encoder = EncoderStack(encoders) # 上面之所以用列表存贮，因为这里进行了特殊处理，不然最好使用ModuleList
         # Decoder
         self.decoder = Decoder(
             [
@@ -139,7 +140,7 @@ class InformerStack(nn.Module):
         )
         # self.end_conv1 = nn.Conv1d(in_channels=label_len+out_len, out_channels=out_len, kernel_size=1, bias=True)
         # self.end_conv2 = nn.Conv1d(in_channels=d_model, out_channels=c_out, kernel_size=1, bias=True)
-        self.projection = nn.Linear(d_model, c_out, bias=True)
+        self.projection = nn.Linear(d_model, c_out, bias=True) # 该全连接层用于输出最后的L_token+ prediction
         
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, 
                 enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None):
@@ -147,7 +148,7 @@ class InformerStack(nn.Module):
         enc_out, attns = self.encoder(enc_out, attn_mask=enc_self_mask)
 
         dec_out = self.dec_embedding(x_dec, x_mark_dec)
-        dec_out = self.decoder(dec_out, enc_out, x_mask=dec_self_mask, cross_mask=dec_enc_mask)
+        dec_out = self.decoder(dec_out, enc_out, x_mask=dec_self_mask, cross_mask=dec_enc_mask) # decoder的输入
         dec_out = self.projection(dec_out)
         
         # dec_out = self.end_conv1(dec_out)
@@ -155,4 +156,4 @@ class InformerStack(nn.Module):
         if self.output_attention:
             return dec_out[:,-self.pred_len:,:], attns
         else:
-            return dec_out[:,-self.pred_len:,:] # [B, L, D]
+            return dec_out[:,-self.pred_len:,:] # [B, L, D],batch,prediction,Dimension
