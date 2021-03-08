@@ -52,18 +52,18 @@ class ProbAttention(nn.Module):
         # calculate the sampled Q_K
         K_expand = K.unsqueeze(-3).expand(B, H, L_Q, L_K, E)
         index_sample = torch.randint(L_K, (L_Q, sample_k)) # real U = U_part(factor*ln(L_k))*L_q
-        K_sample = K_expand[:, :, torch.arange(L_Q).unsqueeze(1), index_sample, :]
-        Q_K_sample = torch.matmul(Q.unsqueeze(-2), K_sample.transpose(-2, -1)).squeeze()
+        K_sample = K_expand[:, :, torch.arange(L_Q).unsqueeze(1), index_sample, :]  # 这里先根据index_sample的index对K进行采样
+        Q_K_sample = torch.matmul(Q.unsqueeze(-2), K_sample.transpose(-2, -1)).squeeze() # 然后计算U个个QK乘积对
 
         # find the Top_k query with sparisty measurement
         M = Q_K_sample.max(-1)[0] - torch.div(Q_K_sample.sum(-1), L_K)
-        M_top = M.topk(n_top, sorted=False)[1]
+        M_top = M.topk(n_top, sorted=False)[1] # 然后选出n_top个最重要的Q
 
         # use the reduced Q to calculate Q_K
         Q_reduce = Q[torch.arange(B)[:, None, None],
                      torch.arange(H)[None, :, None],
                      M_top, :] # factor*ln(L_q)
-        Q_K = torch.matmul(Q_reduce, K.transpose(-2, -1)) # factor*ln(L_q)*L_k
+        Q_K = torch.matmul(Q_reduce, K.transpose(-2, -1)) # factor*ln(L_q)*L_k，用选出的Q和K进行乘积配对选出最有统治力的QK，也就是attention中最重要的部分。
 
         return Q_K, M_top
 
@@ -111,18 +111,19 @@ class ProbAttention(nn.Module):
         scores_top, index = self._prob_QK(queries, keys, sample_k=U_part, n_top=u) 
 
         # add scale factor
-        scale = self.scale or 1./sqrt(D)
+        scale = self.scale or 1./sqrt(D) # 这缩放因子和Transformer中的dk是一样的
         if scale is not None:
             scores_top = scores_top * scale
         # get the context
         context = self._get_initial_context(values, L_Q)
         # update the context with selected top_k queries
-        context, attn = self._update_context(context, values, scores_top, index, L_Q, attn_mask)
+        context, attn = self._update_context(context, values, scores_top, index, L_Q, attn_mask) # attention过后依旧得到等数量的context
         
-        return context.contiguous(), attn
+        return context.contiguous(), attn # view过后都需要这样
 
 
 class AttentionLayer(nn.Module):
+    # 汇总的函数，根据使用的超参数进行调整attention的类别，大小等
     def __init__(self, attention, d_model, n_heads, d_keys=None,
                  d_values=None):
         super(AttentionLayer, self).__init__()
